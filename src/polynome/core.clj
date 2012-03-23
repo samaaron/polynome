@@ -260,6 +260,7 @@
   (range 0 (range-y m)))
 
 (defn map->frame
+  "Warning - only works for 8x8 monomes."
   [m mp]
   (partition 8 (map #(get mp %) (coords m))))
 
@@ -352,27 +353,34 @@
   (apply led-off* m (map-coords m x y))
   :led-extinguished)
 
-(defn- valid-frame-row?
-  "A frame row is valid if it's sequential and it's count is the same as the
-  monome's range."
-  [m row]
+(defn- valid-single-frame-row?
+  "A frame row is valid if it's sequential, its count is 8 and
+  consists of only 1s and 0s"
+  [row]
   (and (sequential? row)
-       (= (count row) (range-x m))
+       (= (count row) 8)
        (every? #(or (= 1 %)
                     (= 0 %))
                row)))
 
-(defn- ensure-frame-rows-valid!
-  [m rows]
-  (when-not (every? #(valid-frame-row? m %) rows)
-    (throw (Exception. (str "invalid frame row send to frame: " rows)))))
+(defn- validate-single-frame!
+  [frame]
+  (when-not (or (count frame) 8
+                (every? #(valid-single-frame-row? %) frame))
+    (throw (Exception. (str "Invalid frame:" frame)))))
 
-(defn frame
-  ([m row0 row1 row2 row3 row4 row5 row6 row7] (frame m 0 row0 row1 row2 row3 row4 row5 row6 row7))
+(defn single-frame
+  "Light a single 8x8 frame. For monomes larger than 8x8 use the idx
+  arg to specify which frame to light. For example, 128 monomes
+  consist of 2 frames and 256 monomes consist of 4 frames."
+  ([m row0 row1 row2 row3 row4 row5 row6 row7]
+     (single-frame m 0 row0 row1 row2 row3 row4 row5 row6 row7))
   ([m idx row0 row1 row2 row3 row4 row5 row6 row7]
-     (ensure-frame-rows-valid! m [row0 row1 row2 row3 row4 row5 row6 row7])
+     (validate-single-frame! [row0 row1 row2 row3 row4 row5 row6 row7])
      (send (state-agent m) update-frame-state m idx row0 row1 row2 row3 row4 row5 row6 row7)
      :frame-updated))
+
+(def frame single-frame)
 
 (declare on-press)
 (declare on-release)
