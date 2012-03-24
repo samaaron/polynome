@@ -78,23 +78,20 @@
   [coords]
   (into {} (map (fn [el] [el :inactive]) coords)))
 
-(declare dummy?)
 (declare coords)
 
 (defn- clear-led-state
   "Resets the led state to all off"
   [state m]
   (let [state (assoc state :led-activation (empty-led-map (coords m)))]
-    (when (not (dummy? m))
-      (monome/clear m))
+    (monome/clear m)
     state))
 
 (defn- illuminate-all-led-state
   "Resets the led state to all on"
   [state m]
   (let [state (assoc state :led-activation (all-lit-led-map (coords m)))]
-    (when (not (dummy? m))
-      (monome/all m))
+    (monome/all m)
     state))
 
 (defn- toggle-all-led-state
@@ -103,11 +100,10 @@
   (let [led-state (:led-activation state)
         led-state (into {} (map (fn [[k v]] [k (toggle-led-activation v)]) led-state))
         state (assoc state :led-activation led-state)]
-    (when-not (dummy? m)
-      (doall (map (fn [[[x y] led]] (if (= 1 led)
-                                     (monome/led-on m x y)
-                                     (monome/led-off m x y)))
-                  led-state)))
+    (doall (map (fn [[[x y] led]] (if (= 1 led)
+                                   (monome/led-on m x y)
+                                   (monome/led-off m x y)))
+                led-state))
     state))
 
 (defn- update-led-state
@@ -120,10 +116,9 @@
                                   (assoc-in [:led-activation [x y]] 1))
                       :led-off (-> state
                                    (assoc-in [:led-activation [x y]] 0)))]
-    (when-not (dummy? m)
-      (case action
-            :led-on (monome/led-on m x y)
-            :led-off (monome/led-off m x y)))
+    (case action
+      :led-on (monome/led-on m x y)
+      :led-off (monome/led-off m x y))
     state))
 
 (defn- toggle-led-state
@@ -131,11 +126,9 @@
   (let [led-state     (get (:led-activation state) [x y])
         new-led-state (toggle-led-activation led-state)
         state         (assoc-in state [:led-activation [x y]] new-led-state)]
-
-    (when-not (dummy? m)
-      (case new-led-state
-            1 (monome/led-on m x y)
-            0 (monome/led-off m x y)))
+    (case new-led-state
+      1 (monome/led-on m x y)
+      0 (monome/led-off m x y))
     state))
 
 (declare cols)
@@ -150,13 +143,10 @@
                             led-state
                             coords-vals)
         state       (assoc state :led-activation led-state)]
-
-    (when-not (dummy? m)
-      (doall (map (fn [[[x y] val]] (if (= 0 val)
+    (doall (map (fn [[[x y] val]] (if (= 0 val)
                                    (monome/led-off m x y)
                                    (monome/led-on m x y)))
-                  coords-vals)))
-
+                coords-vals))
     state))
 
 (defn swap-col-led-state
@@ -168,13 +158,10 @@
                             led-state
                             coords-vals)
         state       (assoc state :led-activation led-state)]
-
-    (when-not (dummy? m)
-      (doall (map (fn [[[x y] val]] (if (= 0 val)
+    (doall (map (fn [[[x y] val]] (if (= 0 val)
                                    (monome/led-off m x y)
                                    (monome/led-on m x y)))
-                  coords-vals)))
-
+                coords-vals))
     state))
 
 (defn mk-coords-map
@@ -190,8 +177,7 @@
   (let [led-state (:led-activation state)
         new-led-state (merge led-state (mk-coords-map m idx rows))
         state (assoc state :led-activation new-led-state)]
-    (when-not (dummy? m)
-      (apply monome/frame m idx (apply rotate-frame (frame-rot m) rows)))
+    (apply monome/frame m idx (apply rotate-frame (frame-rot m) rows))
     state))
 
 (defn connected?
@@ -208,11 +194,6 @@
 (defn kind
   [m]
   (get-in m [::core :kind]))
-
-(defn dummy?
-  "Returns a boolean value denoting whether the monome is a dummy"
-  [m]
-  (get-in m [::core :dummy]))
 
 (defn max-x
   "Returns the monome's maximum x coord"
@@ -522,12 +503,7 @@
    :256n      [[16 16] :north]
    :256e      [[16 16] :east]
    :256s      [[16 16] :south]
-   :256w      [[16 16] :west]
-   :dummy64   [[8   8] :north]
-   :dummy128l [[16  8] :north]
-   :dummy128p [[8  16] :west]
-   :dummy256  [[8   8] :north]
-   })
+   :256w      [[16 16] :west]})
 
 (defn- detect-kind
   [path]
@@ -535,12 +511,6 @@
     #"-m64-"      :64n
     #"-m128-"     :128ln
     #"-m256-"     :256n
-    #"dummy64"    :dummy64
-    #"dummy128"   :dummy128l
-    #"dummy128l"  :dummy128l
-    #"dummy128p"  :dummy128p
-    #"dummy256"   :dummy256
-    #"dummy"      :dummy64
     :unknown))
 
 (defn- monome-info
@@ -586,18 +556,13 @@
   It is also possible to explicitly specify the kind, cable orientation (:north
   :east :south or :west) and num cols and rows.
 
-  If you use one of the :dummy kinds then polynome won't attempt to connect to
-  a physical monome - allowing for mocking and testing when a real connection
-  isn't feasible.
-
   Raises an exception if the supplied path isn't valid or is already in use"
   ([path] (init path (detect-kind path)))
   ([path kind] (let [[[n-cols n-rows] cable] (monome-info kind)]
                  (init path kind cable n-cols n-rows)))
   ([path kind cable n-cols n-rows]
      (let [
-           dummy?                      (= path "dummy")
-           m                           (if dummy? {} (monome-core/connect path))
+           m                           (monome-core/connect path)
            max-x                       (dec n-cols)
            max-y                       (dec n-rows)
            range-x                     n-cols
@@ -624,18 +589,14 @@
                                                         :callbacks callbacks
                                                         :coords coords
                                                         :state state
-                                                        :dummy dummy?
                                                         :kind kind
                                                         :path path
                                                         :cable cable})
-
            update-button-state-handler (fn [action x y]
                                          (send state update-button-state callbacks action x y))]
-
-       (if-not dummy? (handlers/on-action poly-m update-button-state-handler ::state "update monome state"))
+       (.on-action m ::polynome update-button-state-handler)
        (with-meta poly-m {:type ::polynome}))))
 
 (defmethod print-method ::polynome [p w]
   (let [p (get p ::core)]
-      (.write w (format "#<polynome: kind[%s] cable[%s] path[%s] dummy?[%s]>" (:kind p) (:cable p) (:path p) (:dummy p))))
-)
+      (.write w (format "#<polynome: kind[%s] cable[%s] path[%s]>" (:kind p) (:cable p) (:path p)))))
