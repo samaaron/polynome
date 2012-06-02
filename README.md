@@ -30,9 +30,9 @@ Clone into a dir on your machine:
 
     git clone git://github.com/samaaron/polynome.git
 
-Next you need to pull in the dependencies. The easiest way is to use [cake](http://clojure-cake.org/) as it handles the native dependencies within `monome-serial`'s deps  effortlessly:
+Next you need to pull in the dependencies. The easiest way is to use [Leiningen 2](https://github.com/technomancy/leiningen) as it handles the native dependencies within `monome-serial`'s deps  effortlessly:
 
-    cake deps
+    lein deps
 
 ## Contributors
 
