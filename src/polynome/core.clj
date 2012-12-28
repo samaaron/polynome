@@ -97,19 +97,19 @@
 (defn- toggle-all-led-state
   "Toggle's the led state"
   [state m]
-  (let [led-state (:led-activation state)
-        led-state (into {} (map (fn [[k v]] [k (toggle-led-activation v)]) led-state))
-        state (assoc state :led-activation led-state)]
+  (let [led-state     (:led-activation state)
+        new-led-state (into {} (map (fn [[k v]] [k (toggle-led-activation v)]) led-state))
+        state         (assoc state :led-activation new-led-state)]
     (doall (map (fn [[[x y] led]] (if (= 1 led)
                                    (monome/led-on m x y)
                                    (monome/led-off m x y)))
-                led-state))
+                new-led-state))
     state))
 
 (defn- update-led-state
-  "Given a monome's state, a new led action adn the coordinates for the target
-  of that action returns aa new state representing the application of that action
-  to the target"
+  "Given a monome's state, a new led action and the coordinates for the
+   target of that action returns a new state representing the
+   application of that action to the target"
   [state m action x y]
   (let [state   (case action
                       :led-on (-> state
@@ -134,7 +134,7 @@
 (declare cols)
 (declare rows)
 
-(defn swap-row-led-state
+(defn- swap-row-led-state
   [state m x-idx vals]
   (let [led-state   (:led-activation state)
         vals        (map (fn [el] (if (= 0 el) 0 1)) vals)
@@ -149,7 +149,7 @@
                 coords-vals))
     state))
 
-(defn swap-col-led-state
+(defn- swap-col-led-state
   [state m y-idx vals]
   (let [led-state   (:led-activation state)
         vals        (map (fn [el] (if (= 0 el) 0 1)) vals)
@@ -164,7 +164,7 @@
                 coords-vals))
     state))
 
-(defn mk-coords-map
+(defn- mk-coords-map
   [m idx rows]
   (into {}
         (apply concat
@@ -172,7 +172,7 @@
                               (map-indexed (fn [x val]
                                              [(map-coords m x y idx) val]) row)) rows))))
 
-(defn update-frame-state
+(defn- update-frame-state
   [state m idx & rows]
   (let [led-state (:led-activation state)
         new-led-state (merge led-state (mk-coords-map m idx rows))
@@ -230,16 +230,17 @@
   [m]
   (get-in m [::core :coords]))
 
-(defn rows
+(defn row-idxs
   "Returns a sequence of all row indexes (available x coord vals)"
   [m]
   (range 0 (range-x m)))
 
-(defn cols
+(defn col-idxs
   "Returns a sequence of all col indexes (available y coord vals)"
   [m]
   (range 0 (range-y m)))
 
+;; TODO: make generic or remove
 (defn map->frame
   "Warning - only works for 8x8 monomes."
   [m mp]
@@ -251,7 +252,7 @@
   (range (* (range-x m) (range-y m))))
 
 (defn button-coords
-  "Returns a set of coordinates matchine the id passed in. id is an int in the
+  "Returns a set of coordinates matching the id passed in. id is an int in the
    range of 0..num-buttons.
    This is the inverse of button-id"
   [m id]
@@ -266,7 +267,7 @@
   (+ (* (range-y m) y) x))
 
 (defn clear
-  "Turn off all the leds for the specified monome m"
+  "Asynchronously Turn off all the leds for the specified monome m"
   [m]
   (send (state-agent m) clear-led-state m)
   :cleared)
@@ -293,31 +294,35 @@
   [m x y]
   (send (state-agent m) update-led-state m :led-off x y))
 
+;;TODO: shouldn't reverse vals here - need to sort out rotation
 (defn row
-  "Change the state of monome m's row at idx to the value of the supplied
-  seq where 0 is off 1 (or any other value) is on"
-  ;;FIXME: shouldn't reverse vals here - need to sort out rotation
+  "Asynchronously changes the state of monome m's row at idx to the
+   value of the supplied seq where 0 is off 1 (or any other value) is
+   on"
   [m idx vals]
-  (send (state-agent m) swap-row-led-state m idx (reverse vals)))
+  (send (state-agent m) swap-row-led-state m idx (reverse vals))
+  :row-illuminated)
 
+;;TODO: shouldn't reverse vals here - need to sort out rotation
 (defn col
-  "Change the state of monome m's col at idx to the value of the supplied
-  seq where 0 is off 1 (or any other value) is on"
-  ;;FIXME: shouldn't reverse vals here - need to sort out rotation
+  "Asynchronously changes the state of monome m's col at idx to the
+   value of the supplied seq where 0 is off 1 (or any other value) is
+   on"
   [m idx vals]
-  (send (state-agent m) swap-col-led-state m idx (reverse vals)))
+  (send (state-agent m) swap-col-led-state m idx (reverse vals))
+  :col-illuminated)
 
 (defn led
-  "Change the state of monome m's led at coordinate x y to either on or off
-   by specifying a val of 1 or 0 respectively."
+  "Asynchronously changes the state of monome m's led at coordinate x y
+   to either on or off by specifying a val of 1 or 0 respectively."
   [m x y val]
   (if (= 0 val)
     (apply led-off* m (map-coords m x y))
     (apply led-on* m (map-coords m x y)))
-  :led-value-altered)
+  :led-modified)
 
 (defn toggle-led
-  "Toggle the state of monome m's led at coordinate x y."
+  "Asynchronously toggles the state of monome m's led at coordinate x y."
   [m x y]
   (send (state-agent m) toggle-led-state m x y)
   :led-toggled)
@@ -333,6 +338,7 @@
   [m x y]
   (apply led-off* m (map-coords m x y))
   :led-extinguished)
+
 
 (defn- valid-single-frame-row?
   "A frame row is valid if it's sequential, its count is 8 and
@@ -431,20 +437,40 @@
   [m]
   (get-in m [::core :callbacks]))
 
+(defn- led-callbacks*
+  "Return an atom representing the callbacks associated with monome m"
+  [m]
+  (get-in m [::core :led-callbacks]))
+
 (defn callbacks
   "Return a list of callbacks associated with monome m"
   [m]
   @(callbacks* m))
+
+(defn led-callbacks
+  "Return a list of led-callbacks associated with monome m"
+  [m]
+  @(led-callbacks* m))
 
 (defn remove-callback
   "Removes the callback with the associated handle"
   [m handle]
   (swap! (callbacks* m) dissoc handle))
 
+(defn remove-led-callback
+  "Removes the led callback with the associated handle"
+  [m handle]
+  (swap! (led-callbacks* m) dissoc handle))
+
 (defn remove-all-callbacks
   "Removes all callbacks registered with monome m"
   [m]
   (reset! (callbacks* m) {}))
+
+(defn remove-all-led-callbacks
+  "Removes all led callbacks registered with monome m"
+  [m]
+  (reset! (led-callbacks* m) {}))
 
 (defn on-action
   "Register a callback to be called every time a button is pressed or released.
@@ -476,7 +502,7 @@
                                         (f x y state))))))
 
 (defn on-sustain
-  "Register a callback to be called every time a button is released..
+  "Register a callback to be called every time a button is released.
   If called with three params the 2nd param is used as the callback handle.
   The callback fn should take four args:
   x, y  (button coords)
@@ -489,6 +515,16 @@
                                   release (prev-release state x y)
                                   time (- (:time release) (:time press))]
                               (f x y time state))))))
+
+(defn on-led-change
+  "Register a callback to be called every time the leds are modified.
+   The callback fn should take two args:
+   old-leds (state of leds before the change)
+   new-leds (new state of leds)
+   state (history of monome activity)"
+  ([m f] (on-led-change m f f))
+  ([m handle f]
+     (swap! (led-callbacks* m) assoc handle f)))
 
 (def MONOME-KINDS
   {
@@ -525,7 +561,15 @@
   (try
     (f action x y state)
     (catch Exception e
-      (println "Handler Exception - got args:" [action x y state]) (with-out-str (.printStackTrace e)))))
+      (println "Handler Exception - got args:" [action x y state])
+      (with-out-str (.printStackTrace e)))))
+
+(defn- run-led-handler [f old-led new-led state]
+  (try
+    (f old-led new-led state)
+    (catch Exception e
+      (println "LED Handler Exception - got args:" [old-led new-led])
+      (with-out-str (.printStackTrace e)))))
 
 
 (defn update-button-state
@@ -545,18 +589,33 @@
     (doseq [[_ callback] @callbacks] (run-handler callback action x y state))
     state))
 
-(defn init
-  "Initialise a monome. When passed only a path, will attempt to infer the kind
-  of monome from the pathname. Where this isn't possible, you can either specify
-  the kind as a keyword (64n, 128pw , 256s etc. where the number represents the
-  number of buttons on the specific monome and the letters represent the cable
-  position n,e,s,w and orientation for 128 monomes - p and l for portrait and
-  landscape).
+(defn- handle-led-modification
+  [led-callbacks old-led new-led state]
+  (doseq [c (vals led-callbacks)]
+    (run-led-handler c old-led new-led state)))
 
-  It is also possible to explicitly specify the kind, cable orientation (:north
+(defn- add-led-modification-watcher [led-callbacks state]
+  (add-watch state ::led-modification-callback
+             (fn [k r o n]
+               (let [old-led (:led-activation o)
+                     new-led (:led-activation n)]
+                 (when-not (= old-led new-led)
+                   (handle-led-modification @led-callbacks old-led new-led n))))))
+
+(defn init
+  "Initialise a monome. When passed only a path, will attempt to infer
+  the kind of monome from the pathname. Where this isn't possible, you
+  can either specify the kind as a keyword (64n, 128pw , 256s etc. where
+  the number represents the number of buttons on the specific monome and
+  the letters represent the cable position n,e,s,w and orientation for
+  128 monomes - p and l for portrait and landscape).
+
+  It is also possible to explicitly specify the kind, cable
+  orientation (:north
   :east :south or :west) and num cols and rows.
 
-  Raises an exception if the supplied path isn't valid or is already in use"
+  Raises an exception if the supplied path isn't valid or is already in
+  use"
   ([path] (init path (detect-kind path)))
   ([path kind] (let [[[n-cols n-rows] cable] (monome-info kind)]
                  (init path kind cable n-cols n-rows)))
@@ -577,6 +636,7 @@
            press-count                 (into {} (map (fn [el] [el 0]) coords))
 
            callbacks                   (atom {})
+           led-callbacks               (atom {})
            state                       (agent {:event-history history
                                                :button-activation button-activation
                                                :led-activation led-activation
@@ -587,6 +647,7 @@
                                                         :range-x range-x
                                                         :range-y range-y
                                                         :callbacks callbacks
+                                                        :led-callbacks led-callbacks
                                                         :coords coords
                                                         :state state
                                                         :kind kind
@@ -594,7 +655,8 @@
                                                         :cable cable})
            update-button-state-handler (fn [action x y]
                                          (send state update-button-state callbacks action x y))]
-       (.on-action m ::polynome update-button-state-handler)
+       (handlers/on-action m update-button-state-handler "polynome")
+       (add-led-modification-watcher led-callbacks state)
        (with-meta poly-m {:type ::polynome}))))
 
 (defmethod print-method ::polynome [p w]
