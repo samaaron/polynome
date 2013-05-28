@@ -22,7 +22,7 @@ Build monome apps that can intertwine and sparkle together.
 ## Dependencies
 
 * [Clojure 1.3](http://clojure.org)
-* [monome-serial](http://github/samaaron/monome-serial)
+* [monome-serial](http://github.com/samaaron/monome-serial)
 
 ## Installation
 
